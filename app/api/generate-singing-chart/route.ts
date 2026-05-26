@@ -25,7 +25,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = getOpenAIClient();
+    const requestApiKey = request.headers.get("x-openai-api-key")?.trim();
+    const client = getOpenAIClient(requestApiKey);
     const input = parsed.data;
 
     const completion = await client.chat.completions.create({
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const friendlyMessage =
       message === "OPENAI_API_KEY is not set."
-        ? "OPENAI_API_KEY が未設定です。.env.local またはVercelの環境変数にAPIキーを設定してください。"
+        ? "OpenAI APIキーを入力してください。"
         : "歌唱譜の生成中にエラーが発生しました。時間をおいて再試行してください。";
 
     return NextResponse.json(

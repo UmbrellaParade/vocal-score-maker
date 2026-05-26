@@ -2,11 +2,15 @@ import OpenAI from "openai";
 
 let cachedClient: OpenAI | null = null;
 
-export function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
+export function getOpenAIClient(apiKeyOverride?: string) {
+  const apiKey = apiKeyOverride?.trim() || process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not set.");
+  }
+
+  if (apiKeyOverride?.trim()) {
+    return new OpenAI({ apiKey });
   }
 
   if (!cachedClient) {

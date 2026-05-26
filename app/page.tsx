@@ -23,6 +23,7 @@ const defaultForm: SingingChartRequest = {
 export default function Home() {
   const [form, setForm] = useState<SingingChartRequest>(defaultForm);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [apiKey, setApiKey] = useState("");
   const [result, setResult] = useState<SingingChartResponse | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +38,7 @@ export default function Home() {
   function buildAudioFormData(
     input: SingingChartRequest,
     selectedAudioFile: File,
+    selectedApiKey: string,
   ) {
     const formData = new FormData();
 
@@ -46,6 +48,7 @@ export default function Home() {
       }
     });
     formData.append("audioFile", selectedAudioFile);
+    formData.append("openaiApiKey", selectedApiKey);
 
     return formData;
   }
@@ -53,6 +56,14 @@ export default function Home() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    const trimmedApiKey = apiKey.trim();
+
+    if (!trimmedApiKey) {
+      setError("OpenAI APIキーを入力してください。");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -60,13 +71,16 @@ export default function Home() {
         ? "/api/generate-singing-chart-with-audio"
         : "/api/generate-singing-chart";
       const requestInit: RequestInit = audioFile
-        ? {
+          ? {
             method: "POST",
-            body: buildAudioFormData(form, audioFile),
+            body: buildAudioFormData(form, audioFile, trimmedApiKey),
           }
         : {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "x-openai-api-key": trimmedApiKey,
+            },
             body: JSON.stringify(form),
           };
 
@@ -129,6 +143,23 @@ export default function Home() {
                 onChange={(value) => updateField("lyrics", value)}
               />
 
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-slate-200">
+                  OpenAI APIキー
+                </span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder="sk-..."
+                  autoComplete="off"
+                  className="h-11 w-full rounded-lg border border-white/10 bg-ink/80 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-rain/60 focus:ring-2 focus:ring-rain/25"
+                />
+                <p className="text-xs leading-6 text-slate-500">
+                  入力したキーは生成時だけ使い、このツールには保存しません。
+                </p>
+              </label>
+
               <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
                   <FileAudio2 className="text-rain" size={18} />
@@ -188,7 +219,7 @@ export default function Home() {
 
               <button
                 type="submit"
-                disabled={isLoading || !form.lyrics.trim()}
+                disabled={isLoading || !form.lyrics.trim() || !apiKey.trim()}
                 className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-rain px-4 text-sm font-bold text-ink transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-rain/40 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
               >
                 {isLoading ? (
