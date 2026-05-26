@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #080b12;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(8, 11, 18, 1) 38%),
+    #080b12;
+  color: #f8fafc;
+  font-family:
+    Arial,
+    "Hiragino Sans",
+    "Yu Gothic",
+    "Meiryo",
+    sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.32);
+}
+
+.copy-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
