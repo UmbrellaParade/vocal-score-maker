@@ -13,12 +13,39 @@ import type {
 } from "@/types/singing-chart";
 
 const sampleLyrics = "ねぇ まただよ通知一つで\n胸がざわつく";
+const maxAudioBytes = 4 * 1024 * 1024;
 
 const defaultForm: SingingChartRequest = {
   lyrics: "",
   mood: "切ないJ-POP",
   stretchLevel: "standard",
 };
+
+type GeneratePayload = {
+  result?: SingingChartResponse;
+  error?: string;
+};
+
+async function readGeneratePayload(response: Response): Promise<GeneratePayload> {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    return (await response.json()) as GeneratePayload;
+  }
+
+  const text = await response.text();
+
+  if (response.status === 413 || text.includes("Request Entity Too Large")) {
+    return {
+      error:
+        "音源ファイルが大きすぎます。4MB以内の音源にするか、短く書き出してから再度お試しください。",
+    };
+  }
+
+  return {
+    error: text || "生成に失敗しました。時間をおいて再度お試しください。",
+  };
+}
 
 export default function Home() {
   const [form, setForm] = useState<SingingChartRequest>(defaultForm);
@@ -33,6 +60,20 @@ export default function Home() {
     value: SingingChartRequest[K],
   ) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleAudioChange(file: File | null) {
+    setError("");
+
+    if (file && file.size > maxAudioBytes) {
+      setAudioFile(null);
+      setError(
+        "音源ファイルが大きすぎます。4MB以内の音源にするか、短く書き出してから再度お試しください。",
+      );
+      return;
+    }
+
+    setAudioFile(file);
   }
 
   function buildAudioFormData(
@@ -64,6 +105,13 @@ export default function Home() {
       return;
     }
 
+    if (audioFile && audioFile.size > maxAudioBytes) {
+      setError(
+        "音源ファイルが大きすぎます。4MB以内の音源にするか、短く書き出してから再度お試しください。",
+      );
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -71,7 +119,7 @@ export default function Home() {
         ? "/api/generate-singing-chart-with-audio"
         : "/api/generate-singing-chart";
       const requestInit: RequestInit = audioFile
-          ? {
+        ? {
             method: "POST",
             body: buildAudioFormData(form, audioFile, trimmedApiKey),
           }
@@ -85,10 +133,7 @@ export default function Home() {
           };
 
       const response = await fetch(endpoint, requestInit);
-      const payload = (await response.json()) as {
-        result?: SingingChartResponse;
-        error?: string;
-      };
+      const payload = await readGeneratePayload(response);
 
       if (!response.ok || !payload.result) {
         throw new Error(payload.error || "生成に失敗しました。");
@@ -173,12 +218,12 @@ export default function Home() {
                   <input
                     type="file"
                     accept=".mp3,.wav,.m4a,.aac,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/aac"
-                    onChange={(event) => setAudioFile(event.target.files?.[0] ?? null)}
+                    onChange={(event) => handleAudioChange(event.target.files?.[0] ?? null)}
                     className="block w-full cursor-pointer rounded-lg border border-white/10 bg-ink/80 text-sm text-slate-200 file:mr-3 file:h-10 file:border-0 file:bg-rain file:px-3 file:text-sm file:font-bold file:text-ink hover:file:bg-cyan-300"
                   />
                 </label>
                 <p className="mt-2 text-xs text-slate-500">
-                  対応形式: mp3 / wav / m4a / aac
+                  対応形式: mp3 / wav / m4a / aac、4MB以内
                 </p>
                 {audioFile ? (
                   <p className="mt-2 rounded-lg border border-rain/20 bg-rain/10 px-3 py-2 text-xs text-rain">

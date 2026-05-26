@@ -16,7 +16,7 @@ import { singingChartRequestSchema } from "@/types/singing-chart";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const maxAudioBytes = 25 * 1024 * 1024;
+const maxAudioBytes = 4 * 1024 * 1024;
 const allowedExtensions = new Set(["mp3", "wav", "m4a", "aac"]);
 const allowedMimeTypes = new Set([
   "audio/mpeg",
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     if (audioEntry.size > maxAudioBytes) {
-      return createAudioError("音源ファイルは25MB以内にしてください。");
+      return createAudioError("音源ファイルは4MB以内にしてください。");
     }
 
     const parsed = singingChartRequestSchema.safeParse({
