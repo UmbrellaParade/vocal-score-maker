@@ -5,11 +5,10 @@ import { FormEvent, useState } from "react";
 import { LyricsInput } from "@/components/LyricsInput";
 import { ModeSelector } from "@/components/ModeSelector";
 import { SingingChartView } from "@/components/SingingChartView";
-import { singingModeOptions, stretchLevelOptions } from "@/lib/options";
+import { stretchLevelOptions } from "@/lib/options";
 import type {
   SingingChartRequest,
   SingingChartResponse,
-  SingingMode,
   StretchLevel,
 } from "@/types/singing-chart";
 
@@ -18,7 +17,6 @@ const sampleLyrics = "ねぇ まただよ通知一つで\n胸がざわつく";
 const defaultForm: SingingChartRequest = {
   lyrics: "",
   mood: "切ないJ-POP",
-  singingMode: "jpop_natural",
   stretchLevel: "standard",
 };
 
@@ -167,13 +165,6 @@ export default function Home() {
                   className="h-11 w-full rounded-lg border border-white/10 bg-ink/80 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-rain/60 focus:ring-2 focus:ring-rain/25"
                 />
               </label>
-
-              <ModeSelector<SingingMode>
-                label="歌唱譜タイプ"
-                value={form.singingMode}
-                options={singingModeOptions}
-                onChange={(value) => updateField("singingMode", value)}
-              />
 
               <ModeSelector<StretchLevel>
                 label="伸ばし表記"

@@ -1,4 +1,4 @@
-import { singingModeOptions, stretchLevelOptions } from "@/lib/options";
+import { stretchLevelOptions } from "@/lib/options";
 import type { AudioAnalysisSummary } from "@/lib/audio-analysis";
 import type { SelectOption, SingingChartRequest } from "@/types/singing-chart";
 
@@ -46,9 +46,6 @@ ${input.lyrics}
 曲の雰囲気：
 ${input.mood || "指定なし"}
 
-歌唱譜タイプ：
-${labelFor(singingModeOptions, input.singingMode)}
-
 伸ばし表記：
 ${labelFor(stretchLevelOptions, input.stretchLevel)}`;
 }
@@ -69,6 +66,14 @@ ${buildCommonInputText(input)}
 
 音源：
 なし。自然なJ-POPの譜割りを推定してください。
+
+内部自動判定：
+- 読み間違いしやすい漢字はひらがなにする
+- バラード調なら余白と伸ばしを少し多めにする
+- ロック調なら勢いを残し、詰めや区切りを自然に入れる
+- 英語風メロディーなら必要に応じて圧縮読みを使う
+- Suno再投入に向くように、読みやすく改行を整える
+- 音源がない場合は自然なJ-POP歌唱として推定する
 
 ${outputFormat}`;
 }
@@ -97,6 +102,8 @@ ${audioAnalysis.segmentSummary || "タイミング情報なし"}
 - 元歌詞と音源の発音が違う場合は、lyricAudioDiffNotes に簡潔に書く
 - 聞き取りが不確実な箇所は断定せず「可能性があります」と書く
 - 音源解析は推定として扱い、過剰に細かいタイミング情報は出さない
+- 曲の雰囲気が入力されている場合は、伸ばし方や区切りのニュアンス調整にだけ使う
+- Suno再投入に向くように、読みやすく改行を整える
 
 ${outputFormat}`;
 }

@@ -70,7 +70,6 @@ export async function POST(request: Request) {
     const parsed = singingChartRequestSchema.safeParse({
       lyrics: getField(formData, "lyrics"),
       mood: getField(formData, "mood"),
-      singingMode: getField(formData, "singingMode"),
       stretchLevel: getField(formData, "stretchLevel"),
     });
 

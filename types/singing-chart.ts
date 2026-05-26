@@ -1,19 +1,9 @@
 import { z } from "zod";
 
-export const singingModeValues = [
-  "misread_prevention",
-  "jpop_natural",
-  "english_like",
-  "rock",
-  "ballad",
-  "suno_reinput",
-] as const;
 export const stretchLevelValues = ["low", "standard", "high"] as const;
 
-export const singingModeSchema = z.enum(singingModeValues);
 export const stretchLevelSchema = z.enum(stretchLevelValues);
 
-export type SingingMode = z.infer<typeof singingModeSchema>;
 export type StretchLevel = z.infer<typeof stretchLevelSchema>;
 
 export type SelectOption<T extends string> = {
@@ -24,7 +14,6 @@ export type SelectOption<T extends string> = {
 export const singingChartRequestSchema = z.object({
   lyrics: z.string().trim().min(1, "通常歌詞を入力してください。").max(6000),
   mood: z.string().trim().max(200).optional().or(z.literal("")),
-  singingMode: singingModeSchema.default("jpop_natural"),
   stretchLevel: stretchLevelSchema.default("standard"),
 });
 
