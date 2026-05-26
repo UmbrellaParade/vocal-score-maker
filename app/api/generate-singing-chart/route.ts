@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import type { AudioAnalysisSummary } from "@/lib/audio-analysis";
 import { normalizeSingingChartResponse, parseJsonFromModel } from "@/lib/format";
 import { getOpenAIClient, getOpenAIModel } from "@/lib/openai";
 import {
+  buildAudioSingingChartUserPrompt,
   buildSingingChartRepairPrompt,
   buildSingingChartUserPrompt,
   singingChartSystemPrompt,
@@ -10,6 +12,23 @@ import { needsSingingChartRepair } from "@/lib/quality";
 import { singingChartRequestSchema } from "@/types/singing-chart";
 
 export const runtime = "nodejs";
+
+function isAudioAnalysisSummary(value: unknown): value is AudioAnalysisSummary {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.fileName === "string" &&
+    typeof record.fileType === "string" &&
+    typeof record.fileSizeBytes === "number" &&
+    typeof record.transcriptionText === "string" &&
+    Array.isArray(record.segments) &&
+    typeof record.segmentSummary === "string"
+  );
+}
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +49,9 @@ export async function POST(request: Request) {
     const requestApiKey = request.headers.get("x-openai-api-key")?.trim();
     const client = getOpenAIClient(requestApiKey);
     const input = parsed.data;
+    const audioAnalysis = isAudioAnalysisSummary(body.audioAnalysis)
+      ? body.audioAnalysis
+      : undefined;
 
     const completion = await client.chat.completions.create({
       model: getOpenAIModel(),
@@ -37,7 +59,12 @@ export async function POST(request: Request) {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: singingChartSystemPrompt },
-        { role: "user", content: buildSingingChartUserPrompt(input) },
+        {
+          role: "user",
+          content: audioAnalysis
+            ? buildAudioSingingChartUserPrompt(input, audioAnalysis)
+            : buildSingingChartUserPrompt(input),
+        },
       ],
     });
 
@@ -52,7 +79,10 @@ export async function POST(request: Request) {
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: singingChartSystemPrompt },
-          { role: "user", content: buildSingingChartRepairPrompt(input, result) },
+          {
+            role: "user",
+            content: buildSingingChartRepairPrompt(input, result, audioAnalysis),
+          },
         ],
       });
       const repairContent = repairCompletion.choices[0]?.message?.content ?? "";

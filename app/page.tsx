@@ -5,6 +5,12 @@ import { FormEvent, useState } from "react";
 import { LyricsInput } from "@/components/LyricsInput";
 import { ModeSelector } from "@/components/ModeSelector";
 import { SingingChartView } from "@/components/SingingChartView";
+import { buildAudioAnalysisSummary } from "@/lib/audio-analysis";
+import {
+  maxAudioFileBytes,
+  maxAudioFileMegabytes,
+  supportedAudioFormatsText,
+} from "@/lib/audio-limits";
 import { stretchLevelOptions } from "@/lib/options";
 import type {
   SingingChartRequest,
@@ -13,7 +19,6 @@ import type {
 } from "@/types/singing-chart";
 
 const sampleLyrics = "ねぇ まただよ通知一つで\n胸がざわつく";
-const maxAudioBytes = 4 * 1024 * 1024;
 
 const defaultForm: SingingChartRequest = {
   lyrics: "",
@@ -24,6 +29,12 @@ const defaultForm: SingingChartRequest = {
 type GeneratePayload = {
   result?: SingingChartResponse;
   error?: string;
+};
+
+type OpenAIErrorPayload = {
+  error?: {
+    message?: string;
+  };
 };
 
 async function readGeneratePayload(response: Response): Promise<GeneratePayload> {
@@ -38,13 +49,67 @@ async function readGeneratePayload(response: Response): Promise<GeneratePayload>
   if (response.status === 413 || text.includes("Request Entity Too Large")) {
     return {
       error:
-        "音源ファイルが大きすぎます。4MB以内の音源にするか、短く書き出してから再度お試しください。",
+        `送信内容が大きすぎます。音源は${maxAudioFileMegabytes}MB以内にして再度お試しください。`,
     };
   }
 
   return {
     error: text || "生成に失敗しました。時間をおいて再度お試しください。",
   };
+}
+
+async function transcribeAudioFile(
+  file: File,
+  apiKey: string,
+  lyrics: string,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("model", "whisper-1");
+  formData.append("language", "ja");
+  formData.append("prompt", lyrics.slice(0, 1200));
+  formData.append("response_format", "verbose_json");
+  formData.append("timestamp_granularities[]", "segment");
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+  const contentType = response.headers.get("content-type") ?? "";
+  const payload = contentType.includes("application/json")
+    ? ((await response.json()) as OpenAIErrorPayload | unknown)
+    : await response.text();
+
+  if (!response.ok) {
+    const openAIMessage =
+      typeof payload === "object" &&
+      payload &&
+      "error" in payload &&
+      typeof (payload as OpenAIErrorPayload).error?.message === "string"
+        ? (payload as OpenAIErrorPayload).error?.message
+        : "";
+
+    if (response.status === 401) {
+      throw new Error("OpenAI APIキーが正しいか確認してください。");
+    }
+
+    if (response.status === 413 || openAIMessage?.includes("maximum")) {
+      throw new Error(
+        `音源ファイルが大きすぎます。${maxAudioFileMegabytes}MB以内の音源にしてください。`,
+      );
+    }
+
+    throw new Error(
+      openAIMessage
+        ? `音源の文字起こしに失敗しました: ${openAIMessage}`
+        : "音源の文字起こしに失敗しました。音源形式や長さを確認してください。",
+    );
+  }
+
+  return payload;
 }
 
 export default function Home() {
@@ -54,6 +119,7 @@ export default function Home() {
   const [result, setResult] = useState<SingingChartResponse | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
 
   function updateField<K extends keyof SingingChartRequest>(
     key: K,
@@ -65,33 +131,15 @@ export default function Home() {
   function handleAudioChange(file: File | null) {
     setError("");
 
-    if (file && file.size > maxAudioBytes) {
+    if (file && file.size > maxAudioFileBytes) {
       setAudioFile(null);
       setError(
-        "音源ファイルが大きすぎます。4MB以内の音源にするか、短く書き出してから再度お試しください。",
+        `音源ファイルが大きすぎます。${maxAudioFileMegabytes}MB以内の音源にしてください。`,
       );
       return;
     }
 
     setAudioFile(file);
-  }
-
-  function buildAudioFormData(
-    input: SingingChartRequest,
-    selectedAudioFile: File,
-    selectedApiKey: string,
-  ) {
-    const formData = new FormData();
-
-    Object.entries(input).forEach(([key, value]) => {
-      if (value !== undefined) {
-        formData.append(key, String(value));
-      }
-    });
-    formData.append("audioFile", selectedAudioFile);
-    formData.append("openaiApiKey", selectedApiKey);
-
-    return formData;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -105,34 +153,34 @@ export default function Home() {
       return;
     }
 
-    if (audioFile && audioFile.size > maxAudioBytes) {
+    if (audioFile && audioFile.size > maxAudioFileBytes) {
       setError(
-        "音源ファイルが大きすぎます。4MB以内の音源にするか、短く書き出してから再度お試しください。",
+        `音源ファイルが大きすぎます。${maxAudioFileMegabytes}MB以内の音源にしてください。`,
       );
       return;
     }
 
     setIsLoading(true);
+    setLoadingMessage(audioFile ? "音源を解析中" : "生成中");
 
     try {
-      const endpoint = audioFile
-        ? "/api/generate-singing-chart-with-audio"
-        : "/api/generate-singing-chart";
-      const requestInit: RequestInit = audioFile
-        ? {
-            method: "POST",
-            body: buildAudioFormData(form, audioFile, trimmedApiKey),
-          }
-        : {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-openai-api-key": trimmedApiKey,
-            },
-            body: JSON.stringify(form),
-          };
+      const audioAnalysis = audioFile
+        ? buildAudioAnalysisSummary(
+            await transcribeAudioFile(audioFile, trimmedApiKey, form.lyrics),
+            audioFile,
+          )
+        : undefined;
 
-      const response = await fetch(endpoint, requestInit);
+      setLoadingMessage("歌唱譜を生成中");
+
+      const response = await fetch("/api/generate-singing-chart", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-openai-api-key": trimmedApiKey,
+        },
+        body: JSON.stringify({ ...form, audioAnalysis }),
+      });
       const payload = await readGeneratePayload(response);
 
       if (!response.ok || !payload.result) {
@@ -148,6 +196,7 @@ export default function Home() {
       );
     } finally {
       setIsLoading(false);
+      setLoadingMessage("");
     }
   }
 
@@ -201,7 +250,7 @@ export default function Home() {
                   className="h-11 w-full rounded-lg border border-white/10 bg-ink/80 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-rain/60 focus:ring-2 focus:ring-rain/25"
                 />
                 <p className="text-xs leading-6 text-slate-500">
-                  入力したキーは生成時だけ使い、このツールには保存しません。
+                  キーは保存しません。音源解析と生成の時だけOpenAIに送ります。
                 </p>
               </label>
 
@@ -223,7 +272,7 @@ export default function Home() {
                   />
                 </label>
                 <p className="mt-2 text-xs text-slate-500">
-                  対応形式: mp3 / wav / m4a / aac、4MB以内
+                  対応形式: {supportedAudioFormatsText}、{maxAudioFileMegabytes}MB以内
                 </p>
                 {audioFile ? (
                   <p className="mt-2 rounded-lg border border-rain/20 bg-rain/10 px-3 py-2 text-xs text-rain">
@@ -272,7 +321,7 @@ export default function Home() {
                 ) : (
                   <WandSparkles size={18} />
                 )}
-                {isLoading ? "生成中" : "生成する"}
+                {isLoading ? loadingMessage || "生成中" : "生成する"}
               </button>
             </div>
           </form>

@@ -1,6 +1,7 @@
 import { toFile } from "openai/uploads";
 import { NextResponse } from "next/server";
 import { buildAudioAnalysisSummary } from "@/lib/audio-analysis";
+import { maxAudioFileBytes, maxAudioFileMegabytes } from "@/lib/audio-limits";
 import { normalizeSingingChartResponse, parseJsonFromModel } from "@/lib/format";
 import {
   getOpenAIClient,
@@ -18,7 +19,6 @@ import { singingChartRequestSchema } from "@/types/singing-chart";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const maxAudioBytes = 4 * 1024 * 1024;
 const allowedExtensions = new Set(["mp3", "wav", "m4a", "aac"]);
 const allowedMimeTypes = new Set([
   "audio/mpeg",
@@ -65,8 +65,10 @@ export async function POST(request: Request) {
       return createAudioError("対応している音源形式は mp3 / wav / m4a / aac です。");
     }
 
-    if (audioEntry.size > maxAudioBytes) {
-      return createAudioError("音源ファイルは4MB以内にしてください。");
+    if (audioEntry.size > maxAudioFileBytes) {
+      return createAudioError(
+        `音源ファイルは${maxAudioFileMegabytes}MB以内にしてください。`,
+      );
     }
 
     const parsed = singingChartRequestSchema.safeParse({
