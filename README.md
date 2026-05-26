@@ -32,6 +32,18 @@ npm run dev
 
 ブラウザで `http://localhost:3000` を開きます。
 
+## 公開URL
+
+Vercelで公開しています。
+
+https://vocal-score-maker.vercel.app
+
+生成機能を本番環境で使うには、VercelのProject Settings > Environment Variablesに以下を設定してください。
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` 任意。標準は `gpt-4.1-mini`
+- `OPENAI_TRANSCRIPTION_MODEL` 任意。標準は `whisper-1`
+
 ## ビルド確認
 
 ```bash
