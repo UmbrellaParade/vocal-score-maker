@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     const completion = await client.chat.completions.create({
       model: getOpenAIModel(),
-      temperature: 0.65,
+      temperature: 0.55,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: singingChartSystemPrompt },
@@ -40,21 +40,20 @@ export async function POST(request: Request) {
 
     const content = completion.choices[0]?.message?.content ?? "";
     const raw = parseJsonFromModel(content);
-    const result = normalizeSingingChartResponse(raw, input, content);
+    const result = normalizeSingingChartResponse(raw, input);
 
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const friendlyMessage =
       message === "OPENAI_API_KEY is not set."
-        ? "OPENAI_API_KEY が未設定です。.env.local にAPIキーを設定してください。"
+        ? "OPENAI_API_KEY が未設定です。.env.local またはVercelの環境変数にAPIキーを設定してください。"
         : "歌唱譜の生成中にエラーが発生しました。時間をおいて再試行してください。";
 
     return NextResponse.json(
       {
         error: friendlyMessage,
-        detail:
-          process.env.NODE_ENV === "development" ? message : undefined,
+        detail: process.env.NODE_ENV === "development" ? message : undefined,
       },
       { status: 500 },
     );

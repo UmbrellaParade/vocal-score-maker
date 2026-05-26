@@ -1,10 +1,7 @@
 import {
   singingChartResponseSchema,
-  type AnalysisConfidence,
   type SingingChartRequest,
   type SingingChartResponse,
-  type TimingNote,
-  type VocalistLineNote,
 } from "@/types/singing-chart";
 
 export function parseJsonFromModel(content: string) {
@@ -41,90 +38,9 @@ function asStringArray(value: unknown, fallback: string[] = []) {
   return fallback;
 }
 
-function normalizeVocalistNotes(
-  value: unknown,
-  request: SingingChartRequest,
-  singingChart: string,
-): VocalistLineNote[] {
-  if (!Array.isArray(value)) {
-    return buildFallbackVocalistNotes(request, singingChart);
-  }
-
-  const notes = value
-    .map((item, index) => {
-      const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      const originalLine =
-        asString(record.originalLine) || request.lyrics.split(/\r?\n/)[index] || "";
-      const singingLine =
-        asString(record.singingLine) || singingChart.split(/\r?\n/)[index] || originalLine;
-
-      return {
-        originalLine,
-        singingLine,
-        breathSuggestion: asString(record.breathSuggestion) || undefined,
-        expressionNotes: asStringArray(record.expressionNotes),
-        techniqueNotes: asStringArray(record.techniqueNotes),
-      };
-    })
-    .filter((note) => note.originalLine || note.singingLine);
-
-  return notes.length ? notes : buildFallbackVocalistNotes(request, singingChart);
-}
-
-function normalizeTimingNotes(value: unknown): TimingNote[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const notes: TimingNote[] = [];
-
-  value.forEach((item) => {
-    const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-    const originalLine = asString(record.originalLine);
-    const singingLine = asString(record.singingLine);
-    const noteLines = asStringArray(record.notes);
-
-    if (!originalLine && !singingLine && !noteLines.length) {
-      return;
-    }
-
-    notes.push({
-      startTime: asString(record.startTime) || undefined,
-      endTime: asString(record.endTime) || undefined,
-      originalLine,
-      singingLine,
-      notes: noteLines,
-    });
-  });
-
-  return notes.length ? notes : undefined;
-}
-
-function normalizeAnalysisConfidence(value: unknown): AnalysisConfidence | undefined {
-  return value === "high" || value === "medium" || value === "low" ? value : undefined;
-}
-
-function buildFallbackVocalistNotes(
-  request: SingingChartRequest,
-  singingChart: string,
-): VocalistLineNote[] {
-  const originalLines = request.lyrics.split(/\r?\n/).filter(Boolean);
-  const singingLines = singingChart.split(/\r?\n/).filter(Boolean);
-  const lines = originalLines.length ? originalLines : [request.lyrics];
-
-  return lines.map((line, index) => ({
-    originalLine: line,
-    singingLine: singingLines[index] || line,
-    breathSuggestion: "長い行はフレーズの切れ目で小さく吸うと安定しやすいです。",
-    expressionNotes: ["語尾を押し切らず、言葉の余韻を残します。"],
-    techniqueNotes: ["子音を立てすぎず、母音の流れを保ちます。"],
-  }));
-}
-
 export function normalizeSingingChartResponse(
   raw: unknown,
   request: SingingChartRequest,
-  rawText = "",
 ): SingingChartResponse {
   const parsed = singingChartResponseSchema.safeParse(raw);
 
@@ -138,50 +54,14 @@ export function normalizeSingingChartResponse(
   return {
     hiraganaLyrics: asString(record.hiraganaLyrics) || request.lyrics,
     singingChart,
-    audioBasedSingingChart: asString(record.audioBasedSingingChart) || undefined,
     sunoLyrics: asString(record.sunoLyrics) || singingChart.replaceAll(" / ", "\n"),
+    lyricAudioDiffNotes: asStringArray(record.lyricAudioDiffNotes, [
+      "AI出力のJSON整形が崩れたため、元歌詞に近い形で仮表示しています。",
+    ]),
     misreadNotes: asStringArray(record.misreadNotes, [
-      "AI出力のJSON整形が崩れたため、原文に近い形で仮表示しています。",
-      "漢字や固有名詞はSuno用にひらがな表記を添えると安定しやすいです。",
+      "漢字や固有名詞は、Suno用ではひらがな表記を添えると安定しやすいです。",
     ]),
-    lyricAudioDiffNotes: asStringArray(record.lyricAudioDiffNotes),
-    timingNotes: normalizeTimingNotes(record.timingNotes),
-    vocalistNotes: normalizeVocalistNotes(record.vocalistNotes, request, singingChart),
-    trainerNotes:
-      asString(record.trainerNotes) ||
-      (rawText
-        ? `JSONとして解析できない出力が含まれました。再生成すると整う場合があります。\n\n${rawText}`
-        : "生徒に渡す場合は、ブレス位置と語尾の処理を先に固定してから練習すると整理しやすいです。"),
-    practiceTasks: asStringArray(record.practiceTasks, [
-      "歌唱譜を一行ずつ読み上げ、伸ばす音と詰める音を確認する",
-      "ブレス位置を決めて、同じ位置で3回通して歌う",
-    ]),
-    analysisConfidence: normalizeAnalysisConfidence(record.analysisConfidence),
   };
-}
-
-export function formatVocalistNotesForCopy(notes: VocalistLineNote[]) {
-  return notes
-    .map((note, index) => {
-      const expression = note.expressionNotes.map((line) => `- ${line}`).join("\n");
-      const technique = note.techniqueNotes.map((line) => `- ${line}`).join("\n");
-
-      return `${index + 1}行目:
-${note.singingLine}
-
-原文:
-${note.originalLine}
-
-ブレス:
-${note.breathSuggestion || "指定なし"}
-
-表現:
-${expression || "- 指定なし"}
-
-テクニック:
-${technique || "- 指定なし"}`;
-    })
-    .join("\n\n---\n\n");
 }
 
 export function formatFullResultForCopy(result: SingingChartResponse) {
@@ -191,29 +71,12 @@ ${result.hiraganaLyrics}
 # 歌唱譜
 ${result.singingChart}
 
-${result.audioBasedSingingChart ? `# 音源ベース歌唱譜\n${result.audioBasedSingingChart}\n` : ""}
-
 # Suno投入用歌詞
 ${result.sunoLyrics}
 
+# 元歌詞との差分メモ
+${result.lyricAudioDiffNotes.map((note) => `- ${note}`).join("\n")}
+
 # 読み間違い注意ポイント
-${result.misreadNotes.map((note) => `- ${note}`).join("\n")}
-
-${result.lyricAudioDiffNotes?.length ? `# 元歌詞との差分メモ\n${result.lyricAudioDiffNotes.map((note) => `- ${note}`).join("\n")}\n` : ""}
-
-${result.timingNotes?.length ? `# タイミング付き歌唱メモ\n${result.timingNotes.map((note) => {
-    const range = note.startTime || note.endTime ? `${note.startTime ?? "?"}〜${note.endTime ?? "?"}` : "時刻不明";
-    return `- ${range}\n  ${note.singingLine || note.originalLine}\n  ${note.notes.join(" / ")}`;
-  }).join("\n")}\n` : ""}
-
-${result.analysisConfidence ? `# 音源解析の信頼度\n${result.analysisConfidence}\n` : ""}
-
-# ボーカリスト向け歌唱メモ
-${formatVocalistNotesForCopy(result.vocalistNotes)}
-
-# ボイストレーナー向け指導メモ
-${result.trainerNotes}
-
-# 練習課題
-${result.practiceTasks.map((task) => `- ${task}`).join("\n")}`;
+${result.misreadNotes.map((note) => `- ${note}`).join("\n")}`;
 }

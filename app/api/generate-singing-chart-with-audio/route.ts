@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     const audioEntry = formData.get("audioFile");
 
     if (!(audioEntry instanceof File) || audioEntry.size === 0) {
-      return createAudioError("音源解析を使う場合は、音源ファイルを選択してください。");
+      return createAudioError("音源ファイルを選択してください。");
     }
 
     if (!isSupportedAudioFile(audioEntry)) {
@@ -70,14 +70,8 @@ export async function POST(request: Request) {
     const parsed = singingChartRequestSchema.safeParse({
       lyrics: getField(formData, "lyrics"),
       mood: getField(formData, "mood"),
-      useCase: getField(formData, "useCase"),
       singingMode: getField(formData, "singingMode"),
       stretchLevel: getField(formData, "stretchLevel"),
-      detailLevel: getField(formData, "detailLevel"),
-      vocalType: getField(formData, "vocalType"),
-      skillLevel: getField(formData, "skillLevel"),
-      audioSourceType: getField(formData, "audioSourceType"),
-      audioAnalysisMode: getField(formData, "audioAnalysisMode"),
     });
 
     if (!parsed.success) {
@@ -110,7 +104,7 @@ export async function POST(request: Request) {
 
     const completion = await client.chat.completions.create({
       model: getOpenAIModel(),
-      temperature: 0.55,
+      temperature: 0.5,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: singingChartSystemPrompt },
@@ -120,23 +114,14 @@ export async function POST(request: Request) {
 
     const content = completion.choices[0]?.message?.content ?? "";
     const raw = parseJsonFromModel(content);
-    const result = normalizeSingingChartResponse(raw, input, content);
+    const result = normalizeSingingChartResponse(raw, input);
 
-    return NextResponse.json({
-      result,
-      audioAnalysis: {
-        fileName: audioAnalysis.fileName,
-        fileType: audioAnalysis.fileType,
-        fileSizeBytes: audioAnalysis.fileSizeBytes,
-        transcriptionText: audioAnalysis.transcriptionText,
-        segmentCount: audioAnalysis.segments.length,
-      },
-    });
+    return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const friendlyMessage =
       message === "OPENAI_API_KEY is not set."
-        ? "OPENAI_API_KEY が未設定です。.env.local にAPIキーを設定してください。"
+        ? "OPENAI_API_KEY が未設定です。.env.local またはVercelの環境変数にAPIキーを設定してください。"
         : "音源解析または歌唱譜生成中にエラーが発生しました。音源形式や長さを確認して再試行してください。";
 
     return NextResponse.json(
