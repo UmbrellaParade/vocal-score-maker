@@ -1,4 +1,6 @@
 import type {
+  AudioAnalysisMode,
+  AudioSourceType,
   DetailLevel,
   SelectOption,
   SingingMode,
@@ -51,4 +53,19 @@ export const skillLevelOptions: SelectOption<SkillLevel>[] = [
   { value: "intermediate", label: "中級者" },
   { value: "advanced", label: "上級者" },
   { value: "professional", label: "プロ向け" },
+];
+
+export const audioSourceTypeOptions: SelectOption<AudioSourceType>[] = [
+  { value: "finished_vocal_track", label: "ボーカル入り完成音源" },
+  { value: "demo_vocal", label: "仮歌音源" },
+  { value: "suno_generated", label: "Suno生成音源" },
+  { value: "self_recorded_demo", label: "自分で歌ったデモ" },
+  { value: "karaoke_with_vocal", label: "カラオケ＋歌入り" },
+  { value: "other", label: "その他" },
+];
+
+export const audioAnalysisModeOptions: SelectOption<AudioAnalysisMode>[] = [
+  { value: "lyrics_priority", label: "歌詞優先" },
+  { value: "audio_priority", label: "音源優先" },
+  { value: "suno_reinput", label: "Suno再投入" },
 ];

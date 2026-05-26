@@ -19,3 +19,7 @@ export function getOpenAIClient() {
 export function getOpenAIModel() {
   return process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
 }
+
+export function getOpenAITranscriptionModel() {
+  return process.env.OPENAI_TRANSCRIPTION_MODEL?.trim() || "whisper-1";
+}

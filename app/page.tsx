@@ -1,11 +1,13 @@
 "use client";
 
-import { LoaderCircle, Music2, WandSparkles } from "lucide-react";
+import { FileAudio2, LoaderCircle, Music2, WandSparkles } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { LyricsInput } from "@/components/LyricsInput";
 import { ModeSelector } from "@/components/ModeSelector";
 import { SingingChartView } from "@/components/SingingChartView";
 import {
+  audioAnalysisModeOptions,
+  audioSourceTypeOptions,
   detailLevelOptions,
   singingModeOptions,
   skillLevelOptions,
@@ -14,6 +16,8 @@ import {
   vocalTypeOptions,
 } from "@/lib/options";
 import type {
+  AudioAnalysisMode,
+  AudioSourceType,
   DetailLevel,
   SingingChartRequest,
   SingingChartResponse,
@@ -35,10 +39,14 @@ const defaultForm: SingingChartRequest = {
   detailLevel: "standard",
   vocalType: "unspecified",
   skillLevel: "intermediate",
+  audioSourceType: "suno_generated",
+  audioAnalysisMode: "lyrics_priority",
 };
 
 export default function Home() {
   const [form, setForm] = useState<SingingChartRequest>(defaultForm);
+  const [audioAnalysisEnabled, setAudioAnalysisEnabled] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [result, setResult] = useState<SingingChartResponse | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -53,14 +61,32 @@ export default function Home() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    if (audioAnalysisEnabled && !audioFile) {
+      setError("音源解析を使う場合は、音源ファイルを選択してください。");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/generate-singing-chart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const endpoint =
+        audioAnalysisEnabled && audioFile
+          ? "/api/generate-singing-chart-with-audio"
+          : "/api/generate-singing-chart";
+      const requestInit: RequestInit =
+        audioAnalysisEnabled && audioFile
+          ? {
+              method: "POST",
+              body: buildAudioFormData(form, audioFile),
+            }
+          : {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(form),
+            };
+
+      const response = await fetch(endpoint, requestInit);
       const payload = (await response.json()) as {
         result?: SingingChartResponse;
         error?: string;
@@ -80,6 +106,22 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function buildAudioFormData(
+    input: SingingChartRequest,
+    selectedAudioFile: File,
+  ) {
+    const formData = new FormData();
+
+    Object.entries(input).forEach(([key, value]) => {
+      if (value !== undefined) {
+        formData.append(key, String(value));
+      }
+    });
+    formData.append("audioFile", selectedAudioFile);
+
+    return formData;
   }
 
   return (
@@ -194,6 +236,113 @@ export default function Home() {
                     ))}
                   </select>
                 </label>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={audioAnalysisEnabled}
+                      onChange={(event) => setAudioAnalysisEnabled(event.target.checked)}
+                      className="h-4 w-4 accent-rain"
+                    />
+                    音源解析あり
+                  </label>
+                  <FileAudio2 className="text-rain" size={18} />
+                </div>
+
+                {audioAnalysisEnabled ? (
+                  <div className="mt-4 space-y-4">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-semibold text-slate-200">
+                        音源ファイル
+                      </span>
+                      <input
+                        type="file"
+                        accept=".mp3,.wav,.m4a,.aac,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/aac"
+                        onChange={(event) =>
+                          setAudioFile(event.target.files?.[0] ?? null)
+                        }
+                        className="block w-full cursor-pointer rounded-lg border border-white/10 bg-ink/80 text-sm text-slate-200 file:mr-3 file:h-10 file:border-0 file:bg-rain file:px-3 file:text-sm file:font-bold file:text-ink hover:file:bg-cyan-300"
+                      />
+                      {audioFile ? (
+                        <p className="text-xs text-slate-400">
+                          {audioFile.name} / {(audioFile.size / 1024 / 1024).toFixed(1)}MB
+                        </p>
+                      ) : (
+                        <p className="text-xs text-slate-500">
+                          mp3 / wav / m4a / aac に対応。音源は保存せず解析にだけ使います。
+                        </p>
+                      )}
+                    </label>
+
+                    <label className="block space-y-2">
+                      <span className="text-sm font-semibold text-slate-200">
+                        音源タイプ
+                      </span>
+                      <select
+                        value={form.audioSourceType}
+                        onChange={(event) =>
+                          updateField(
+                            "audioSourceType",
+                            event.target.value as AudioSourceType,
+                          )
+                        }
+                        className="h-11 w-full rounded-lg border border-white/10 bg-ink/80 px-3 text-sm text-white outline-none transition focus:border-rain/60 focus:ring-2 focus:ring-rain/25"
+                      >
+                        {audioSourceTypeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <ModeSelector<AudioAnalysisMode>
+                      label="音源解析モード"
+                      value={form.audioAnalysisMode}
+                      options={audioAnalysisModeOptions}
+                      onChange={(value) => updateField("audioAnalysisMode", value)}
+                      columns="three"
+                    />
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-ink/55 px-3 text-sm text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={form.audioAnalysisMode === "lyrics_priority"}
+                          onChange={(event) =>
+                            updateField(
+                              "audioAnalysisMode",
+                              event.target.checked
+                                ? "lyrics_priority"
+                                : "suno_reinput",
+                            )
+                          }
+                          className="h-4 w-4 accent-rain"
+                        />
+                        元歌詞を優先する
+                      </label>
+                      <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-ink/55 px-3 text-sm text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={form.audioAnalysisMode === "audio_priority"}
+                          onChange={(event) =>
+                            updateField(
+                              "audioAnalysisMode",
+                              event.target.checked
+                                ? "audio_priority"
+                                : "lyrics_priority",
+                            )
+                          }
+                          className="h-4 w-4 accent-coral"
+                        />
+                        音源の歌い方を優先する
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {error ? (

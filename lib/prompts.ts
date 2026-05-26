@@ -1,4 +1,6 @@
 import {
+  audioAnalysisModeOptions,
+  audioSourceTypeOptions,
   detailLevelOptions,
   singingModeOptions,
   skillLevelOptions,
@@ -6,6 +8,7 @@ import {
   useCaseOptions,
   vocalTypeOptions,
 } from "@/lib/options";
+import type { AudioAnalysisSummary } from "@/lib/audio-analysis";
 import type { SelectOption, SingingChartRequest } from "@/types/singing-chart";
 
 export const singingChartSystemPrompt = `あなたは「歌唱譜メーカー」です。
@@ -84,5 +87,93 @@ ${labelFor(skillLevelOptions, input.skillLevel)}
   ],
   "trainerNotes": "",
   "practiceTasks": []
+}`;
+}
+
+export function buildAudioSingingChartUserPrompt(
+  input: SingingChartRequest,
+  audioAnalysis: AudioAnalysisSummary,
+) {
+  return `以下の元歌詞と、アップロード音源から推定された文字起こし・タイミングを照合して、音源ベースの歌唱譜を生成してください。
+
+通常歌詞：
+${input.lyrics}
+
+曲の雰囲気：
+${input.mood || "指定なし"}
+
+用途：
+${labelFor(useCaseOptions, input.useCase)}
+
+譜割りモード：
+${labelFor(singingModeOptions, input.singingMode)}
+
+伸ばし表記の強さ：
+${labelFor(stretchLevelOptions, input.stretchLevel)}
+
+歌唱メモの詳しさ：
+${labelFor(detailLevelOptions, input.detailLevel)}
+
+ボーカルタイプ：
+${labelFor(vocalTypeOptions, input.vocalType)}
+
+歌唱レベル：
+${labelFor(skillLevelOptions, input.skillLevel)}
+
+音源タイプ：
+${labelFor(audioSourceTypeOptions, input.audioSourceType)}
+
+音源解析モード：
+${labelFor(audioAnalysisModeOptions, input.audioAnalysisMode)}
+
+音源ファイル：
+${audioAnalysis.fileName} (${audioAnalysis.fileType})
+
+音源文字起こし：
+${audioAnalysis.transcriptionText || "文字起こしなし"}
+
+音源タイミング候補：
+${audioAnalysis.segmentSummary || "タイミング情報なし"}
+
+音源解析ありの場合の重要ルール：
+- 元歌詞の意味を尊重する
+- 音源で伸ばしている可能性が高い箇所は「ー」で表記する
+- 音源で詰めている可能性が高い箇所は「っ」や圧縮読みで表記する
+- 音源で区切っている可能性が高い箇所は「/」または「｜」で表記する
+- 元歌詞と音源の発音が違う場合は lyricAudioDiffNotes に記載する
+- 聞き取りが不確実な箇所は断定せず「可能性があります」と書く
+- timingNotes には、音源タイミング候補がある場合だけ startTime / endTime を入れる
+- Suno再投入用には、AIが読み間違えにくい表記を優先する
+- 既存曲の完全コピーではなく、ユーザー自身の歌唱設計を補助する目的で出力する
+
+出力形式：
+{
+  "hiraganaLyrics": "",
+  "singingChart": "",
+  "audioBasedSingingChart": "",
+  "sunoLyrics": "",
+  "misreadNotes": [],
+  "lyricAudioDiffNotes": [],
+  "timingNotes": [
+    {
+      "startTime": "",
+      "endTime": "",
+      "originalLine": "",
+      "singingLine": "",
+      "notes": []
+    }
+  ],
+  "vocalistNotes": [
+    {
+      "originalLine": "",
+      "singingLine": "",
+      "breathSuggestion": "",
+      "expressionNotes": [],
+      "techniqueNotes": []
+    }
+  ],
+  "trainerNotes": "",
+  "practiceTasks": [],
+  "analysisConfidence": "medium"
 }`;
 }

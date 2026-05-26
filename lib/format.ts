@@ -1,7 +1,9 @@
 import {
   singingChartResponseSchema,
+  type AnalysisConfidence,
   type SingingChartRequest,
   type SingingChartResponse,
+  type TimingNote,
   type VocalistLineNote,
 } from "@/types/singing-chart";
 
@@ -69,6 +71,39 @@ function normalizeVocalistNotes(
   return notes.length ? notes : buildFallbackVocalistNotes(request, singingChart);
 }
 
+function normalizeTimingNotes(value: unknown): TimingNote[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const notes: TimingNote[] = [];
+
+  value.forEach((item) => {
+    const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const originalLine = asString(record.originalLine);
+    const singingLine = asString(record.singingLine);
+    const noteLines = asStringArray(record.notes);
+
+    if (!originalLine && !singingLine && !noteLines.length) {
+      return;
+    }
+
+    notes.push({
+      startTime: asString(record.startTime) || undefined,
+      endTime: asString(record.endTime) || undefined,
+      originalLine,
+      singingLine,
+      notes: noteLines,
+    });
+  });
+
+  return notes.length ? notes : undefined;
+}
+
+function normalizeAnalysisConfidence(value: unknown): AnalysisConfidence | undefined {
+  return value === "high" || value === "medium" || value === "low" ? value : undefined;
+}
+
 function buildFallbackVocalistNotes(
   request: SingingChartRequest,
   singingChart: string,
@@ -103,11 +138,14 @@ export function normalizeSingingChartResponse(
   return {
     hiraganaLyrics: asString(record.hiraganaLyrics) || request.lyrics,
     singingChart,
+    audioBasedSingingChart: asString(record.audioBasedSingingChart) || undefined,
     sunoLyrics: asString(record.sunoLyrics) || singingChart.replaceAll(" / ", "\n"),
     misreadNotes: asStringArray(record.misreadNotes, [
       "AI出力のJSON整形が崩れたため、原文に近い形で仮表示しています。",
       "漢字や固有名詞はSuno用にひらがな表記を添えると安定しやすいです。",
     ]),
+    lyricAudioDiffNotes: asStringArray(record.lyricAudioDiffNotes),
+    timingNotes: normalizeTimingNotes(record.timingNotes),
     vocalistNotes: normalizeVocalistNotes(record.vocalistNotes, request, singingChart),
     trainerNotes:
       asString(record.trainerNotes) ||
@@ -118,6 +156,7 @@ export function normalizeSingingChartResponse(
       "歌唱譜を一行ずつ読み上げ、伸ばす音と詰める音を確認する",
       "ブレス位置を決めて、同じ位置で3回通して歌う",
     ]),
+    analysisConfidence: normalizeAnalysisConfidence(record.analysisConfidence),
   };
 }
 
@@ -152,11 +191,22 @@ ${result.hiraganaLyrics}
 # 歌唱譜
 ${result.singingChart}
 
+${result.audioBasedSingingChart ? `# 音源ベース歌唱譜\n${result.audioBasedSingingChart}\n` : ""}
+
 # Suno投入用歌詞
 ${result.sunoLyrics}
 
 # 読み間違い注意ポイント
 ${result.misreadNotes.map((note) => `- ${note}`).join("\n")}
+
+${result.lyricAudioDiffNotes?.length ? `# 元歌詞との差分メモ\n${result.lyricAudioDiffNotes.map((note) => `- ${note}`).join("\n")}\n` : ""}
+
+${result.timingNotes?.length ? `# タイミング付き歌唱メモ\n${result.timingNotes.map((note) => {
+    const range = note.startTime || note.endTime ? `${note.startTime ?? "?"}〜${note.endTime ?? "?"}` : "時刻不明";
+    return `- ${range}\n  ${note.singingLine || note.originalLine}\n  ${note.notes.join(" / ")}`;
+  }).join("\n")}\n` : ""}
+
+${result.analysisConfidence ? `# 音源解析の信頼度\n${result.analysisConfidence}\n` : ""}
 
 # ボーカリスト向け歌唱メモ
 ${formatVocalistNotesForCopy(result.vocalistNotes)}
