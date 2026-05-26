@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { normalizeSingingChartResponse, parseJsonFromModel } from "@/lib/format";
 import { getOpenAIClient, getOpenAIModel } from "@/lib/openai";
 import {
+  buildSingingChartRepairPrompt,
   buildSingingChartUserPrompt,
   singingChartSystemPrompt,
 } from "@/lib/prompts";
+import { needsSingingChartRepair } from "@/lib/quality";
 import { singingChartRequestSchema } from "@/types/singing-chart";
 
 export const runtime = "nodejs";
@@ -41,7 +43,22 @@ export async function POST(request: Request) {
 
     const content = completion.choices[0]?.message?.content ?? "";
     const raw = parseJsonFromModel(content);
-    const result = normalizeSingingChartResponse(raw, input);
+    let result = normalizeSingingChartResponse(raw, input);
+
+    if (needsSingingChartRepair(input, result)) {
+      const repairCompletion = await client.chat.completions.create({
+        model: getOpenAIModel(),
+        temperature: 0.62,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: singingChartSystemPrompt },
+          { role: "user", content: buildSingingChartRepairPrompt(input, result) },
+        ],
+      });
+      const repairContent = repairCompletion.choices[0]?.message?.content ?? "";
+      const repairRaw = parseJsonFromModel(repairContent);
+      result = normalizeSingingChartResponse(repairRaw, input);
+    }
 
     return NextResponse.json({ result });
   } catch (error) {
